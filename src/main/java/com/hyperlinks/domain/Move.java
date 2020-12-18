@@ -7,7 +7,7 @@ import lombok.Setter;
 @Setter
 @Getter
 @AllArgsConstructor
-public class Move extends User{
+public class Move{
 
     private User user;
 
@@ -15,5 +15,15 @@ public class Move extends User{
 
     private int y;
 
+    public User getUser() {
+        return user;
+    }
 
+    public int getX() {
+        return x;
+    }
+
+    public int getY() {
+        return y;
+    }
 }
