@@ -53,9 +53,35 @@ public class GameService {
         return optionalMove.isEmpty();
     }
 
-    public User checkGameWon(GameData gameData){
-        //if game is won, return user object
-        //if game is not won, return null
+    public User checkGameWon(GameData gameData, List<User> players){
+        for(User player : players){
+            boolean gameWonByPlayer = false;
+            if (gameData.getMove(1, 1).isPresent() && gameData.getMove(1, 1 ).get().getUser().equals(player)){
+                if (gameData.getMove(0, 0).isPresent() && gameData.getMove(1, 1 ).get().getUser().equals(player)){
+                    if (gameData.getMove(2, 2).isPresent() && gameData.getMove(1, 1 ).get().getUser().equals(player)){
+                        gameWonByPlayer = true;
+                    }
+                }
+                else if (gameData.getMove(0, 1).isPresent() && gameData.getMove(1, 1 ).get().getUser().equals(player)){
+                    if (gameData.getMove(2, 1).isPresent() && gameData.getMove(1, 1 ).get().getUser().equals(player)){
+                        gameWonByPlayer = true;
+                    }
+                }
+                else if (gameData.getMove(1, 0).isPresent() && gameData.getMove(1, 1 ).get().getUser().equals(player)){
+                    if (gameData.getMove(1, 2).isPresent() && gameData.getMove(1, 1 ).get().getUser().equals(player)){
+                        gameWonByPlayer = true;
+                    }
+                }
+                else if (gameData.getMove(2, 0).isPresent() && gameData.getMove(1, 1 ).get().getUser().equals(player)){
+                    if (gameData.getMove(0, 2).isPresent() && gameData.getMove(1, 1 ).get().getUser().equals(player)){
+                        gameWonByPlayer = true;
+                    }
+                }
+            }
+            if(gameWonByPlayer){
+                return player;
+            }
+        }
         return null;
     }
 
