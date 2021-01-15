@@ -1,6 +1,8 @@
 package com.hyperlinks.service;
 
 import com.hyperlinks.domain.Game;
+import com.hyperlinks.domain.GameData;
+import com.hyperlinks.domain.Move;
 import com.hyperlinks.domain.User;
 import com.hyperlinks.repository.GameRepository;
 import com.hyperlinks.util.InviteCodeGenerator;
@@ -40,6 +42,21 @@ public class GameService {
         Game game = new Game(inviteCode, user);
 
         return gameRepository.save(game);
+    }
+
+    public boolean validMove(GameData gameData, int x, int y){
+        if(x > 2 || x < 0 || y > 2 || y < 0){
+            return false;
+        }
+
+        Optional<Move> optionalMove = gameData.getMove(x, y);
+        return optionalMove.isEmpty();
+    }
+
+    public User checkGameWon(GameData gameData){
+        //if game is won, return user object
+        //if game is not won, return null
+        return null;
     }
 
 }
