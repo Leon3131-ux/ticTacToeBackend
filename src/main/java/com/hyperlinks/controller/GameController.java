@@ -64,7 +64,7 @@ public class GameController {
         Game game = optionalGame.get();
         User user = userService.getByUsernameOrThrowException(principal.getName());
         if(!game.getHost().equals(user) || gameService.getAmountOfPlayers(game) != 2){
-            return new ResponseEntity(HttpStatus.FORBIDDEN);
+            return new ResponseEntity(HttpStatus.BAD_REQUEST);
         }
         return new ResponseEntity<>(gameConverter.toDto(game), HttpStatus.OK);
     }
