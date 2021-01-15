@@ -55,4 +55,18 @@ public class GameController {
         userService.save(user);
         return new ResponseEntity<>(gameConverter.toDto(game), HttpStatus.OK);
     }
+
+    @RequestMapping(method = RequestMethod.POST)
+    public ResponseEntity startGame(@PathVariable("inviteCode") String inviteCode, Principal principal){
+        Optional<Game> optionalGame = gameService.findByInviteCode(inviteCode);
+        if(optionalGame.isEmpty()) return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+
+        Game game = optionalGame.get();
+        User user = userService.getByUsernameOrThrowException(principal.getName());
+        if(!game.getHost().equals(user) || gameService.getAmountOfPlayers(game) != 2){
+            return new ResponseEntity(HttpStatus.FORBIDDEN);
+        }
+        return new ResponseEntity<>(gameConverter.toDto(game), HttpStatus.OK);
+    }
+
 }
