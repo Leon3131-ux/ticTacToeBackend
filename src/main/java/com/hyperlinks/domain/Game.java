@@ -8,6 +8,7 @@ import lombok.Setter;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
+import javax.persistence.OneToOne;
 
 @Entity
 @AllArgsConstructor
@@ -18,5 +19,8 @@ public class Game extends AbstractEntity{
 
     @Column(nullable = false, unique = true)
     private String inviteCode;
+
+    @OneToOne
+    private User host;
 
 }
