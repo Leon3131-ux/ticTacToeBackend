@@ -9,6 +9,7 @@ import com.hyperlinks.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessageSendingOperations;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.security.Principal;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -26,6 +28,7 @@ public class GameController {
     private final GameConverter gameConverter;
     private final GameService gameService;
     private final UserService userService;
+    private final SimpMessageSendingOperations simpleMessagingTemplate;
     private final Map<Game, GameData> gameDataMap = new HashMap<>();
 
     @RequestMapping(method = RequestMethod.GET)
@@ -69,4 +72,11 @@ public class GameController {
         return new ResponseEntity<>(gameConverter.toDto(game), HttpStatus.OK);
     }
 
+    public void launchGameOverWebsocket(Game game){
+        GameData gameData = gameDataMap.get(game);
+        List<User> players = gameService.getPlayers(game);
+        for (User player : players){
+            simpleMessagingTemplate.convertAndSendToUser(player.getUsername(),"/launch/" + game.getInviteCode(), "Game Started");
+        }
+    }
 }
