@@ -1,107 +1,165 @@
 package com.hyperlinks.controller;
 
 import com.hyperlinks.converter.GameConverter;
+import com.hyperlinks.converter.MoveConverter;
 import com.hyperlinks.domain.Game;
-import com.hyperlinks.domain.GameData;
 import com.hyperlinks.domain.Move;
-import com.hyperlinks.domain.User;
-import com.hyperlinks.dto.ReceiveMoveDto;
-import com.hyperlinks.dto.SendMoveDto;
+import com.hyperlinks.domain.Player;
+import com.hyperlinks.dto.*;
 import com.hyperlinks.service.GameService;
-import com.hyperlinks.service.UserService;
+import com.hyperlinks.service.MoveService;
+import com.hyperlinks.service.PlayerService;
+import com.hyperlinks.validator.MoveValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.messaging.handler.annotation.DestinationVariable;
-import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessageSendingOperations;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.stereotype.Controller;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.WebDataBinder;
+import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
-@RestController
+@Controller
 @RequiredArgsConstructor
 public class GameController {
 
     private final GameConverter gameConverter;
+    private final MoveConverter moveConverter;
     private final GameService gameService;
-    private final UserService userService;
+    private final PlayerService playerService;
+    private final MoveService moveService;
     private final SimpMessageSendingOperations simpleMessagingTemplate;
-    private final Map<Game, GameData> gameDataMap = new HashMap<>();
+    private final MoveValidator moveValidator;
 
-    @RequestMapping(method = RequestMethod.GET)
+    @InitBinder("saveMoveDto")
+    public void initSaveProductBinder(WebDataBinder binder) {
+        binder.setValidator(moveValidator);
+    }
+
+    @RequestMapping(method = RequestMethod.GET, value = "/api/createGame")
     public ResponseEntity createGame (Principal principal){
-        User user = userService.getByUsernameOrThrowException(principal.getName());
-        if(user.getGame() != null){
-            return new ResponseEntity(HttpStatus.BAD_REQUEST);
+        Player player = playerService.getByUsernameOrThrowException(principal.getName());
+        if(player.getGame() == null){
+            Game game = gameService.createGame(player);
+            player.setGame(game);
+            game.setHost(player);
+            game = gameService.save(game);
+            playerService.save(player);
+            return new ResponseEntity<>(gameConverter.toDto(game), HttpStatus.CREATED);
         }
-        Game game = gameService.createGame(user);
-        gameDataMap.put(game, new GameData());
-        user.setGame(game);
-        userService.save(user);
-
-        return new ResponseEntity(gameConverter.toDto(game), HttpStatus.CREATED);
+        return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
     }
 
-    @RequestMapping(method = RequestMethod.POST)
+    @RequestMapping(method = RequestMethod.POST, value = "/api/joinGame/{inviteCode}")
     public ResponseEntity joinGame (@PathVariable("inviteCode") String inviteCode, Principal principal){
-        Optional<Game> optionalGame = gameService.findByInviteCode(inviteCode);
-        if(optionalGame.isEmpty()) return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-
-        Game game = optionalGame.get();
-        User user = userService.getByUsernameOrThrowException(principal.getName());
-        if(user.getGame() != null || gameService.getAmountOfPlayers(game) != 1){
-            return new ResponseEntity(HttpStatus.BAD_REQUEST);
-        }
-        user.setGame(game);
-        userService.save(user);
-        return new ResponseEntity<>(gameConverter.toDto(game), HttpStatus.OK);
-    }
-
-    @RequestMapping(method = RequestMethod.POST)
-    public ResponseEntity startGame(@PathVariable("inviteCode") String inviteCode, Principal principal){
-        Optional<Game> optionalGame = gameService.findByInviteCode(inviteCode);
-        if(optionalGame.isEmpty()) return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-
-        Game game = optionalGame.get();
-        User user = userService.getByUsernameOrThrowException(principal.getName());
-        if(!game.getHost().equals(user) || gameService.getAmountOfPlayers(game) != 2){
-            return new ResponseEntity(HttpStatus.BAD_REQUEST);
-        }
-        launchGameOverWebsocket(game);
-        return new ResponseEntity<>(gameConverter.toDto(game), HttpStatus.OK);
-    }
-
-    public void launchGameOverWebsocket(Game game){
-        List<User> players = gameService.getPlayers(game);
-        for (User player : players){
-            simpleMessagingTemplate.convertAndSendToUser(player.getUsername(),"/launch/" + game.getInviteCode(), "Game Started");
-        }
-    }
-
-    @MessageMapping(value = "/send/{inviteCode}")
-    public void receiveMove(@DestinationVariable("inviteCode") String inviteCode, ReceiveMoveDto receiveMoveDto, Principal principal){
         Optional<Game> optionalGame = gameService.findByInviteCode(inviteCode);
         if(optionalGame.isPresent()){
             Game game = optionalGame.get();
-            User user = userService.getByUsernameOrThrowException(principal.getName());
-
-            if(gameService.getPlayers(game).contains(user)){
-                int x = receiveMoveDto.getX();
-                int y = receiveMoveDto.getY();
-                if(gameService.validMove(gameDataMap.get(game), x, y)){
-                    GameData gameData = gameDataMap.get(game);
-                    gameData.addMove(new Move(user, x, y));
-                    simpleMessagingTemplate.convertAndSend("/move/" + inviteCode, new SendMoveDto(x, y, user.getUsername()));
-                }
+            Player player = playerService.getByUsernameOrThrowException(principal.getName());
+            List<Player> players = game.getPlayers();
+            if(player.getGame() == null && players.size() == 1){
+                player.setGame(game);
+                playerService.save(player);
+                simpleMessagingTemplate.convertAndSend("/join/" + game.getInviteCode(), new UsernameDto(player.getUsername()));
+                return new ResponseEntity<>(gameConverter.toDto(game), HttpStatus.OK);
             }
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         }
+        return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+    }
+
+    @RequestMapping(method = RequestMethod.GET, value = "/api/startGame")
+    public ResponseEntity startGame(Principal principal){
+        Player player = playerService.getByUsernameOrThrowException(principal.getName());
+        Game game = player.getGame();
+        if(game != null && game.getHost().equals(player)){
+            List<Player> players = game.getPlayers();
+            if(players.size() == 2){
+                game.setCurrentTurnPlayer(players.get(new Random().nextInt(players.size())));
+                game.setStarted(true);
+                gameService.save(game);
+                simpleMessagingTemplate.convertAndSend("/launch/" + player.getGame().getInviteCode(), new LaunchGameDto("started"));
+                return new ResponseEntity<>(HttpStatus.OK);
+            }
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
+        return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+    }
+
+    @RequestMapping(method = RequestMethod.GET, value = "/api/leaveGame")
+    public ResponseEntity leaveGame(Principal principal){
+        Player user = playerService.getByUsernameOrThrowException(principal.getName());
+        if(user.getGame() != null){
+            Game game = user.getGame();
+            if(game.getHost().equals(user) || game.getStarted()){
+                game.getPlayers().forEach(player -> {
+                    player.setGame(null);
+                    playerService.save(player);
+                });
+                gameService.delete(game);
+            }else {
+                user.setGame(null);
+                playerService.save(user);
+            }
+            simpleMessagingTemplate.convertAndSend("/leave/" + game.getInviteCode(), new UsernameDto(user.getUsername()));
+            return new ResponseEntity<>(HttpStatus.OK);
+        }
+        return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+    }
+
+    @RequestMapping(method = RequestMethod.GET, value = "/api/activeGame")
+    public ResponseEntity getActiveGame(Principal principal){
+        Player player = playerService.getByUsernameOrThrowException(principal.getName());
+        if(player.getGame() != null){
+            return new ResponseEntity<>(gameConverter.toDto(player.getGame()), HttpStatus.OK);
+        }
+        return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+    }
+
+    @RequestMapping(method = RequestMethod.POST, value = "/api/saveMove")
+    public ResponseEntity saveMove(@RequestBody @Validated SaveMoveDto saveMoveDto, Principal principal){
+        Player player = playerService.getByUsernameOrThrowException(principal.getName());
+        Game game = player.getGame();
+        if(game != null && game.getCurrentTurnPlayer().equals(player)){
+            if(moveService.validateMove(saveMoveDto, game)){
+                Move move = moveConverter.toEntity(saveMoveDto, game, player);
+                move = moveService.save(move);
+                simpleMessagingTemplate.convertAndSend("/move/" + game.getInviteCode(), moveConverter.toDto(move));
+                switchCurrentTurnPlayer(game);
+                if(checkGameDone(game)){
+                    game.getPlayers().forEach(currentPlayer -> {
+                        currentPlayer.setGame(null);
+                        playerService.save(player);
+                    });
+                    gameService.delete(game);
+                }
+                return new ResponseEntity<>(HttpStatus.OK);
+            }
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
+        return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+    }
+
+    private void switchCurrentTurnPlayer(Game game){
+        List<Player> players = game.getPlayers();
+        Optional<Player> oppositePlayer = players.stream().filter(user -> !user.equals(game.getCurrentTurnPlayer())).findFirst();
+        oppositePlayer.ifPresent(game::setCurrentTurnPlayer);
+        gameService.save(game);
+        simpleMessagingTemplate.convertAndSend("/currentTurn/" + game.getInviteCode(), new UsernameDto(game.getCurrentTurnPlayer().getUsername()));
+    }
+
+    private boolean checkGameDone(Game game){
+        Player winner = gameService.checkForWinner(game);
+        if(winner == null && game.getMoves().size() == 9){
+            simpleMessagingTemplate.convertAndSend("/win/" + game.getInviteCode(), new WinDto(null, true));
+            return true;
+        }else if (winner != null){
+            simpleMessagingTemplate.convertAndSend("/win/" + game.getInviteCode(), new WinDto(winner.getUsername(), false));
+            return true;
+        }
+        return false;
     }
 }

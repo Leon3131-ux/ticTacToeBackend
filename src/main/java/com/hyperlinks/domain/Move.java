@@ -1,22 +1,32 @@
 package com.hyperlinks.domain;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
-@Setter
-@Getter
+import javax.persistence.CascadeType;
+import javax.persistence.Entity;
+import javax.persistence.JoinColumn;
+import javax.persistence.ManyToOne;
+
 @AllArgsConstructor
-public class Move{
+@NoArgsConstructor
+@Getter
+@Setter
+@Entity
+public class Move extends AbstractEntity{
 
-    private User user;
+    @ManyToOne
+    private Player player;
+
+    @ManyToOne(cascade = CascadeType.ALL)
+    @JoinColumn(name="game_id", nullable=false)
+    private Game game;
 
     private int x;
 
     private int y;
 
-    public User getUser() {
-        return user;
+    public Player getPlayer() {
+        return player;
     }
 
     public int getX() {

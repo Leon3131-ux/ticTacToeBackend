@@ -7,6 +7,7 @@ import lombok.Setter;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
+import javax.persistence.JoinColumn;
 import javax.persistence.ManyToOne;
 
 @Entity
@@ -14,7 +15,12 @@ import javax.persistence.ManyToOne;
 @NoArgsConstructor
 @Getter
 @Setter
-public class User extends AbstractEntity {
+public class Player extends AbstractEntity {
+
+    public Player(String username, String password){
+        this.username = username;
+        this.password = password;
+    }
 
     @Column(nullable = false, unique = true)
     private String username;
@@ -23,7 +29,7 @@ public class User extends AbstractEntity {
     private String password;
 
     @ManyToOne
-    @Column(nullable = true)
+    @JoinColumn(name="game_id")
     private Game game;
 
 }
