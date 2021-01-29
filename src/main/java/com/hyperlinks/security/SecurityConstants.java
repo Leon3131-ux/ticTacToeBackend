@@ -6,7 +6,7 @@ public interface SecurityConstants {
     String TOKEN_PREFIX = "Bearer ";
     String HEADER_STRING = "Authorization";
 
-    String SIGN_UP_URL = "/api/signup";
+    String SIGN_UP_URL = "/api/signUp";
     String LOGIN_URL = "/api/login";
     int EXPIRATION_DATE = 864000000;
 }
